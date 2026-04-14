@@ -1,2 +1,5 @@
 [phases.setup]
-nixPkgs = ["ffmpeg", "python3", "pip"]
+nixPkgs = ["ffmpeg", "python3", "yt-dlp"]
+
+[start]
+cmd = "node index.js"
