@@ -41,11 +41,12 @@ let isPlaying = false;
 
 async function getVideoTitle(url) {
   return new Promise((resolve) => {
-    const proc = spawn(YTDLP, [
+   const proc = spawn(YTDLP, [
       '--get-title',
       '--no-playlist',
       '--no-check-certificate',
       '--cookies', COOKIES,
+      '--extractor-args', 'youtube:player_client=web',
       '--add-header', `User-Agent:${UA}`,
       url
     ]);
@@ -64,6 +65,7 @@ async function getPlaylistVideos(url) {
       '-j',
       '--no-check-certificate',
       '--cookies', COOKIES,
+      '--extractor-args', 'youtube:player_client=web',
       '--add-header', `User-Agent:${UA}`,
       url
     ]);
@@ -109,13 +111,13 @@ async function playVideo(videoUrl, voiceChannel, interaction, msgReply) {
   }
 
   const ytdlp = spawn(YTDLP, [
-    '-f', 'bestaudio/best',
-    '-q',
+    '-f', 'bestaudio',
     '--no-playlist',
     '--no-check-certificate',
     '--extractor-retries', '3',
     '--socket-timeout', '30',
     '--cookies', COOKIES,
+    '--extractor-args', 'youtube:player_client=web',
     '--add-header', `User-Agent:${UA}`,
     '-o', '-',
     videoUrl
