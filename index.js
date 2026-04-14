@@ -17,6 +17,8 @@ const YTDLP = process.platform === 'win32'
   ? 'C:\\Users\\PC\\AppData\\Local\\Python\\pythoncore-3.14-64\\Scripts\\yt-dlp.exe'
   : 'yt-dlp';
 
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -37,9 +39,16 @@ let isPlaying = false;
 
 async function getVideoTitle(url) {
   return new Promise((resolve) => {
-    const proc = spawn(YTDLP, ['--get-title', '--no-playlist', url]);
+    const proc = spawn(YTDLP, [
+      '--get-title',
+      '--no-playlist',
+      '--no-check-certificate',
+      '--add-header', `User-Agent:${UA}`,
+      url
+    ]);
     let title = '';
     proc.stdout.on('data', (chunk) => { title += chunk; });
+    proc.stderr.on('data', (chunk) => console.error('yt-dlp title stderr:', chunk.toString()));
     proc.on('close', () => resolve(title.trim() || 'Unknown title'));
     proc.on('error', () => resolve('Unknown title'));
   });
@@ -47,9 +56,16 @@ async function getVideoTitle(url) {
 
 async function getPlaylistVideos(url) {
   return new Promise((resolve, reject) => {
-    const proc = spawn(YTDLP, ['--flat-playlist', '-j', url]);
+    const proc = spawn(YTDLP, [
+      '--flat-playlist',
+      '-j',
+      '--no-check-certificate',
+      '--add-header', `User-Agent:${UA}`,
+      url
+    ]);
     let data = '';
     proc.stdout.on('data', (chunk) => { data += chunk; });
+    proc.stderr.on('data', (chunk) => console.error('yt-dlp playlist stderr:', chunk.toString()));
     proc.on('close', (code) => {
       if (code !== 0) return reject(new Error('Failed to get playlist'));
       const videos = data.trim().split('\n').map(line => JSON.parse(line));
@@ -89,13 +105,18 @@ async function playVideo(videoUrl, voiceChannel, interaction, msgReply) {
   }
 
   const ytdlp = spawn(YTDLP, [
-    '-f', 'bestaudio',
+    '-f', 'bestaudio/best',
     '-q',
     '--no-playlist',
+    '--no-check-certificate',
+    '--extractor-retries', '3',
+    '--socket-timeout', '30',
+    '--add-header', `User-Agent:${UA}`,
     '-o', '-',
     videoUrl
   ]);
 
+  ytdlp.stderr.on('data', (chunk) => console.error('yt-dlp stderr:', chunk.toString()));
   ytdlp.on('error', (err) => console.error('yt-dlp error:', err));
   ytdlp.on('close', (code) => {
     if (code !== 0) console.error('yt-dlp exited with code', code);
