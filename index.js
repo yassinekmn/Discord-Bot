@@ -15,7 +15,7 @@ const { spawn } = require('child_process');
 
 const YTDLP = process.platform === 'win32'
   ? 'C:\\Users\\PC\\AppData\\Local\\Python\\pythoncore-3.14-64\\Scripts\\yt-dlp.exe'
-  : 'yt-dlp';
+  : '/usr/local/bin/yt-dlp';
 
 const COOKIES = process.platform === 'win32' ? 'cookies.txt' : '/app/cookies.txt';
 
