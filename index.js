@@ -17,6 +17,8 @@ const YTDLP = process.platform === 'win32'
   ? 'C:\\Users\\PC\\AppData\\Local\\Python\\pythoncore-3.14-64\\Scripts\\yt-dlp.exe'
   : 'yt-dlp';
 
+const COOKIES = process.platform === 'win32' ? 'cookies.txt' : '/app/cookies.txt';
+
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 const client = new Client({
@@ -43,6 +45,7 @@ async function getVideoTitle(url) {
       '--get-title',
       '--no-playlist',
       '--no-check-certificate',
+      '--cookies', COOKIES,
       '--add-header', `User-Agent:${UA}`,
       url
     ]);
@@ -60,6 +63,7 @@ async function getPlaylistVideos(url) {
       '--flat-playlist',
       '-j',
       '--no-check-certificate',
+      '--cookies', COOKIES,
       '--add-header', `User-Agent:${UA}`,
       url
     ]);
@@ -111,6 +115,7 @@ async function playVideo(videoUrl, voiceChannel, interaction, msgReply) {
     '--no-check-certificate',
     '--extractor-retries', '3',
     '--socket-timeout', '30',
+    '--cookies', COOKIES,
     '--add-header', `User-Agent:${UA}`,
     '-o', '-',
     videoUrl
