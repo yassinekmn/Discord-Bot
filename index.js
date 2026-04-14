@@ -1,4 +1,6 @@
 process.env.OPUS_ENGINE = 'opusscript';
+process.env.YTDL_NO_UPDATE = '1';
+delete process.env.YTDL_PATH;
 require('dotenv').config();
 
 const { Client, GatewayIntentBits } = require('discord.js');
