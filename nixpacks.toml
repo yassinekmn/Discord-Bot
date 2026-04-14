@@ -2,7 +2,7 @@
 nixPkgs = ["nodejs_22", "ffmpeg", "python3", "yt-dlp"]
 
 [phases.install]
-cmds = ["npm ci", "pip install --upgrade yt-dlp --break-system-packages"]
+cmds = ["npm ci", "pip3 install --upgrade yt-dlp --break-system-packages"]
 
 [start]
 cmd = "node index.js"
