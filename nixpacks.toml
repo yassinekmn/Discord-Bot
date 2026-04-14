@@ -2,7 +2,7 @@
 nixPkgs = ["nodejs_22", "ffmpeg", "yt-dlp"]
 
 [phases.install]
-cmds = ["npm ci"]
+cmds = ["npm ci", "yt-dlp -U"]
 
 [start]
 cmd = "node index.js"

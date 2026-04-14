@@ -21,6 +21,14 @@ const COOKIES = process.platform === 'win32' ? 'cookies.txt' : '/app/cookies.txt
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
+const EXTRA_ARGS = [
+  '--no-check-certificate',
+  '--cookies', COOKIES,
+  '--extractor-args', 'youtube:player_client=web,web_creator',
+  '--force-ipv4',
+  '--add-header', `User-Agent:${UA}`,
+];
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -41,13 +49,10 @@ let isPlaying = false;
 
 async function getVideoTitle(url) {
   return new Promise((resolve) => {
-   const proc = spawn(YTDLP, [
+    const proc = spawn(YTDLP, [
       '--get-title',
       '--no-playlist',
-      '--no-check-certificate',
-      '--cookies', COOKIES,
-      '--extractor-args', 'youtube:player_client=web',
-      '--add-header', `User-Agent:${UA}`,
+      ...EXTRA_ARGS,
       url
     ]);
     let title = '';
@@ -63,10 +68,7 @@ async function getPlaylistVideos(url) {
     const proc = spawn(YTDLP, [
       '--flat-playlist',
       '-j',
-      '--no-check-certificate',
-      '--cookies', COOKIES,
-      '--extractor-args', 'youtube:player_client=web',
-      '--add-header', `User-Agent:${UA}`,
+      ...EXTRA_ARGS,
       url
     ]);
     let data = '';
@@ -113,12 +115,9 @@ async function playVideo(videoUrl, voiceChannel, interaction, msgReply) {
   const ytdlp = spawn(YTDLP, [
     '-f', 'bestaudio',
     '--no-playlist',
-    '--no-check-certificate',
     '--extractor-retries', '3',
     '--socket-timeout', '30',
-    '--cookies', COOKIES,
-    '--extractor-args', 'youtube:player_client=web',
-    '--add-header', `User-Agent:${UA}`,
+    ...EXTRA_ARGS,
     '-o', '-',
     videoUrl
   ]);
