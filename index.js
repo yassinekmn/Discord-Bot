@@ -24,7 +24,7 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const EXTRA_ARGS = [
   '--no-check-certificate',
   '--cookies', COOKIES,
-  '--extractor-args', 'youtube:player_client=tv,web',
+  '--extractor-args', 'youtube:player_client=ios',
   '--force-ipv4',
   '--add-header', `User-Agent:${UA}`,
 ];
