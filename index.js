@@ -24,6 +24,7 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const EXTRA_ARGS = [
   '--no-check-certificate',
   '--cookies', COOKIES,
+  '--extractor-args', 'youtube:skip=hls,dash',
   '--force-ipv4',
   '--add-header', `User-Agent:${UA}`,
 ];
@@ -112,7 +113,7 @@ async function playVideo(videoUrl, voiceChannel, interaction, msgReply) {
   }
 
   const ytdlp = spawn(YTDLP, [
-    '-f', 'bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best',
+    '-f', 'best[ext=mp4]/best',
     '--no-playlist',
     '--extractor-retries', '3',
     '--socket-timeout', '30',

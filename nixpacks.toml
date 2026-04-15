@@ -5,10 +5,7 @@ nixPkgs = ["nodejs_22", "ffmpeg", "python3"]
 cmds = [
   "npm ci",
   "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp",
-  "chmod a+rx /usr/local/bin/yt-dlp",
-  "mkdir -p /root/.yt-dlp/plugins",
-  "curl -L https://github.com/coletdjnz/yt-dlp-get-pot/releases/latest/download/yt-dlp-get-pot.zip -o /root/.yt-dlp/plugins/yt-dlp-get-pot.zip",
-  "python3 -m zipfile -e /root/.yt-dlp/plugins/yt-dlp-get-pot.zip /root/.yt-dlp/plugins && rm /root/.yt-dlp/plugins/yt-dlp-get-pot.zip"
+  "chmod a+rx /usr/local/bin/yt-dlp"
 ]
 
 [start]
