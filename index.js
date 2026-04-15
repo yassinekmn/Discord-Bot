@@ -21,10 +21,19 @@ const COOKIES = process.platform === 'win32' ? 'cookies.txt' : '/app/cookies.txt
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-const EXTRA_ARGS = [
+// Used for getting title and playlist info (needs cookies, uses web client)
+const EXTRA_ARGS_INFO = [
   '--no-check-certificate',
   '--cookies', COOKIES,
-  '--extractor-args', 'youtube:skip=hls,dash',
+  '--extractor-args', 'youtube:player_client=web',
+  '--force-ipv4',
+  '--add-header', `User-Agent:${UA}`,
+];
+
+// Used for actual playback (no cookies, uses android_vr which works on servers)
+const EXTRA_ARGS_PLAY = [
+  '--no-check-certificate',
+  '--extractor-args', 'youtube:player_client=android_vr',
   '--force-ipv4',
   '--add-header', `User-Agent:${UA}`,
 ];
@@ -52,7 +61,7 @@ async function getVideoTitle(url) {
     const proc = spawn(YTDLP, [
       '--get-title',
       '--no-playlist',
-      ...EXTRA_ARGS,
+      ...EXTRA_ARGS_INFO,
       url
     ]);
     let title = '';
@@ -68,7 +77,7 @@ async function getPlaylistVideos(url) {
     const proc = spawn(YTDLP, [
       '--flat-playlist',
       '-j',
-      ...EXTRA_ARGS,
+      ...EXTRA_ARGS_INFO,
       url
     ]);
     let data = '';
@@ -113,11 +122,11 @@ async function playVideo(videoUrl, voiceChannel, interaction, msgReply) {
   }
 
   const ytdlp = spawn(YTDLP, [
-    '-f', 'best[ext=mp4]/best',
+    '-f', 'bestaudio/best',
     '--no-playlist',
     '--extractor-retries', '3',
     '--socket-timeout', '30',
-    ...EXTRA_ARGS,
+    ...EXTRA_ARGS_PLAY,
     '-o', '-',
     videoUrl
   ]);
