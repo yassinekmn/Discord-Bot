@@ -12,27 +12,59 @@ const {
   StreamType,
 } = require('@discordjs/voice');
 const { spawn } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const YTDLP = process.platform === 'win32'
   ? 'C:\\Users\\PC\\AppData\\Local\\Python\\pythoncore-3.14-64\\Scripts\\yt-dlp.exe'
   : '/usr/local/bin/yt-dlp';
 
-const COOKIES = process.platform === 'win32' ? 'cookies.txt' : '/app/cookies.txt';
+// Resolve the cookies file path. If the YOUTUBE_COOKIES env var is set, write
+// its contents to a temporary file so yt-dlp can read them. This allows
+// Railway users to paste their Netscape-format cookie file into an env var
+// without needing to bake it into the Docker image.
+function resolveCookiesFile() {
+  const envCookies = process.env.YOUTUBE_COOKIES;
+  if (envCookies && envCookies.trim()) {
+    const tmpPath = path.join(os.tmpdir(), 'yt-dlp-cookies.txt');
+    try {
+      fs.writeFileSync(tmpPath, envCookies, 'utf8');
+      console.log(`[cookies] Wrote YOUTUBE_COOKIES env var to ${tmpPath}`);
+      return tmpPath;
+    } catch (e) {
+      console.error('[cookies] Failed to write YOUTUBE_COOKIES to temp file:', e);
+    }
+  }
+  // Fall back to the bundled cookies.txt if it exists
+  const fallback = process.platform === 'win32' ? 'cookies.txt' : '/app/cookies.txt';
+  if (fs.existsSync(fallback)) {
+    return fallback;
+  }
+  return null;
+}
+
+const COOKIES = resolveCookiesFile();
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+// Build the --cookies flag args only when a cookies file is available
+const COOKIES_ARGS = COOKIES ? ['--cookies', COOKIES] : [];
 
 // Used for getting title and playlist info (needs cookies, uses web client)
 const EXTRA_ARGS_INFO = [
   '--no-check-certificate',
-  '--cookies', COOKIES,
+  ...COOKIES_ARGS,
   '--extractor-args', 'youtube:player_client=web',
   '--force-ipv4',
   '--add-header', `User-Agent:${UA}`,
 ];
 
-// Used for actual playback (no cookies, uses android_vr which works on servers)
+// Used for actual playback — also pass cookies when available so authenticated
+// requests can bypass bot-detection on restricted videos
 const EXTRA_ARGS_PLAY = [
   '--no-check-certificate',
+  ...COOKIES_ARGS,
   '--extractor-args', 'youtube:player_client=android_vr',
   '--force-ipv4',
   '--add-header', `User-Agent:${UA}`,
@@ -121,28 +153,74 @@ async function playVideo(videoUrl, voiceChannel, interaction, msgReply) {
     throw e;
   }
 
-  const ytdlp = spawn(YTDLP, [
-    '-f', 'bestaudio/best',
-    '--no-playlist',
-    '--extractor-retries', '3',
-    '--socket-timeout', '30',
-    ...EXTRA_ARGS_PLAY,
-    '-o', '-',
-    videoUrl
-  ]);
+  // Spawn yt-dlp and wait for the first chunk of audio data before wiring up
+  // the player. This lets us detect bot-detection / download failures early
+  // and throw a proper error instead of passing a broken stream to the player.
+  const ytdlpStream = await new Promise((resolve, reject) => {
+    const ytdlp = spawn(YTDLP, [
+      '-f', 'bestaudio/best',
+      '--no-playlist',
+      '--extractor-retries', '3',
+      '--socket-timeout', '30',
+      ...EXTRA_ARGS_PLAY,
+      '-o', '-',
+      videoUrl
+    ]);
 
-  ytdlp.stderr.on('data', (chunk) => console.error('yt-dlp stderr:', chunk.toString()));
-  ytdlp.on('error', (err) => console.error('yt-dlp error:', err));
-  ytdlp.on('close', (code) => {
-    if (code !== 0) console.error('yt-dlp exited with code', code);
+    let stderrOutput = '';
+    let resolved = false;
+
+    ytdlp.stderr.on('data', (chunk) => {
+      const text = chunk.toString();
+      stderrOutput += text;
+      console.error('yt-dlp stderr:', text);
+    });
+
+    ytdlp.on('error', (err) => {
+      if (!resolved) {
+        resolved = true;
+        reject(new Error(`yt-dlp process error: ${err.message}`));
+      }
+    });
+
+    ytdlp.on('close', (code) => {
+      if (code !== 0 && !resolved) {
+        resolved = true;
+        // Surface a human-readable message for the most common failure
+        const botBlocked = /Sign in to confirm|bot detection|not a bot/i.test(stderrOutput);
+        const msg = botBlocked
+          ? 'YouTube blocked the download (bot detection). Set the YOUTUBE_COOKIES env var with valid cookies to bypass this.'
+          : `yt-dlp exited with code ${code}`;
+        reject(new Error(msg));
+      }
+    });
+
+    // Resolve as soon as the first byte of audio arrives so we know the
+    // download actually started. The stream is still live at this point.
+    ytdlp.stdout.once('data', (chunk) => {
+      if (!resolved) {
+        resolved = true;
+        // Push the chunk back so createAudioResource sees the full stream
+        ytdlp.stdout.unshift(chunk);
+        resolve(ytdlp.stdout);
+      }
+    });
   });
 
-  const resource = createAudioResource(ytdlp.stdout, {
+  if (!ytdlpStream) {
+    throw new Error('yt-dlp returned a null stream — download may have failed silently.');
+  }
+
+  const resource = createAudioResource(ytdlpStream, {
     inputType: StreamType.Arbitrary,
   });
 
   player = createAudioPlayer();
   player.play(resource);
+
+  if (!connection || connection.state.status === VoiceConnectionStatus.Destroyed) {
+    throw new Error('Voice connection was lost before playback could start.');
+  }
   connection.subscribe(player);
 
   player.on(AudioPlayerStatus.Idle, async () => {
@@ -155,10 +233,36 @@ async function playVideo(videoUrl, voiceChannel, interaction, msgReply) {
           await msgReply.edit(`Now playing: **${nextVideo.title}** in **${voiceChannel.name}**! 🎵`);
         }
       } catch (e) {
-        console.error('Error playing next:', e);
-        if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
-          connection.destroy();
-          connection = null;
+        console.error('Error playing next video:', e);
+        // Notify the user about the failed track and attempt to skip to the one after
+        if (msgReply && msgReply.channel) {
+          try {
+            await msgReply.edit(`⚠️ Failed to play **${nextVideo.title}**: ${e.message} — skipping…`);
+          } catch (_) {}
+        }
+        // Try to advance past the broken track rather than stopping entirely
+        currentIndex++;
+        if (currentIndex < queue.length) {
+          const skipTo = queue[currentIndex];
+          try {
+            await playVideo(skipTo.url, voiceChannel, interaction, msgReply);
+            if (msgReply && msgReply.channel) {
+              await msgReply.edit(`Now playing: **${skipTo.title}** in **${voiceChannel.name}**! 🎵`);
+            }
+          } catch (e2) {
+            console.error('Error playing video after skip:', e2);
+            if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
+              connection.destroy();
+              connection = null;
+            }
+            isPlaying = false;
+          }
+        } else {
+          if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
+            connection.destroy();
+            connection = null;
+          }
+          isPlaying = false;
         }
       }
     } else {
